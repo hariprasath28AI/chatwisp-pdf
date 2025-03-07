@@ -1,114 +1,96 @@
+// Modified PdfConverter.tsx (I'm assuming this exists based on your imports)
+
 import React, { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import URLInput from './URLInput';
-import ConversionButton from './ConversionButton';
-import { validateClaudeURL, extractShareId } from '@/utils/validation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { validateClaudeURL } from '@/utils/validation';
 import { convertClaudeToPdf } from '@/utils/pdfUtils';
-import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 
-interface PdfConverterProps {
-  className?: string;
-}
-
-const PdfConverter: React.FC<PdfConverterProps> = ({ className }) => {
+const PdfConverter = () => {
   const [url, setUrl] = useState('');
   const [isConverting, setIsConverting] = useState(false);
-  const [recentUrls, setRecentUrls] = useState<string[]>([]);
-  
-  const isValidUrl = validateClaudeURL(url);
-  
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
   const handleConvert = async () => {
-    if (!isValidUrl) {
-      toast.error('Please enter a valid Claude share URL');
+    setError(null);
+    
+    // Validate URL
+    if (!validateClaudeURL(url)) {
+      setError('Please enter a valid Claude.ai share URL (e.g., https://claude.ai/share/uuid-format)');
       return;
     }
     
     setIsConverting(true);
     
     try {
-      // Use the real conversion function instead of simulation
+      // Show toast for starting conversion
+      toast({
+        title: "Starting conversion",
+        description: "Processing your Claude conversation...",
+      });
+      
+      // Attempt to convert the URL to PDF
       await convertClaudeToPdf(url);
       
-      // Add to recent URLs (no duplicates)
-      if (!recentUrls.includes(url)) {
-        setRecentUrls(prev => [url, ...prev].slice(0, 5));
-      }
-      
-      toast.success('PDF generated successfully!');
-      
+      // Show success toast
+      toast({
+        title: "Conversion complete",
+        description: "Your PDF has been downloaded.",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Conversion error:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      
+      // Show error toast
+      toast({
+        title: "Conversion failed",
+        description: error instanceof Error ? error.message : "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+      });
+      
+      setError(error instanceof Error ? error.message : "Failed to generate PDF. Please try again.");
     } finally {
       setIsConverting(false);
     }
   };
-  
+
   return (
-    <div className={cn("w-full max-w-xl mx-auto p-2", className)}>
-      <Card className="overflow-hidden border-border bg-white dark:bg-black/20 shadow-soft backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="space-y-6 animate-fade-in">
-            <div className="space-y-3">
-              <h2 className="text-xl font-medium">Convert Claude Conversation</h2>
-              <p className="text-sm text-muted-foreground">
-                Enter a Claude.ai share URL to convert the conversation to a downloadable PDF
-              </p>
-            </div>
-            
-            <div className="space-y-4">
-              <URLInput 
-                value={url}
-                onChange={setUrl}
-                disabled={isConverting}
-              />
-              
-              <div className="flex justify-end">
-                <ConversionButton 
-                  onClick={handleConvert}
-                  isLoading={isConverting}
-                  disabled={!isValidUrl || isConverting}
-                />
-              </div>
-            </div>
-            
-            {recentUrls.length > 0 && (
-              <div className="pt-4 border-t border-border animate-fade-in">
-                <h3 className="text-sm font-medium mb-3">Recent Conversions</h3>
-                <div className="space-y-2">
-                  {recentUrls.map((recentUrl, index) => (
-                    <div 
-                      key={index} 
-                      className="text-xs bg-secondary rounded-md p-2 flex justify-between items-center animate-slide-up"
-                      style={{ animationDelay: `${index * 50}ms` }}
-                    >
-                      <span className="truncate max-w-[80%]">{recentUrl}</span>
-                      <button
-                        onClick={() => {
-                          setUrl(recentUrl);
-                        }}
-                        className="text-primary hover:text-primary/80 transition-colors"
-                      >
-                        Use
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Claude Share to PDF Converter</CardTitle>
+        <CardDescription>
+          Convert a Claude.ai share link to a downloadable PDF
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="url">Claude Share URL</Label>
+            <Input
+              id="url"
+              placeholder="https://claude.ai/share/..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={isConverting}
+            />
+            {error && <p className="text-sm text-red-500">{error}</p>}
           </div>
-        </CardContent>
-      </Card>
-      
-      <div className="mt-8 px-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          This tool converts public Claude AI shared conversations to PDF format.
-          <br />
-          Make sure you have permission to download and use the content.
-        </p>
-      </div>
-    </div>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button 
+          onClick={handleConvert} 
+          disabled={isConverting || !url} 
+          className="w-full"
+        >
+          {isConverting ? 'Converting...' : 'Convert to PDF'}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 };
 
