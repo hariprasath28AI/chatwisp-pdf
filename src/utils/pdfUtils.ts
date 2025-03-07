@@ -1,6 +1,7 @@
 
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { extractShareId } from './validation';
 
 /**
  * Fetches the content from a Claude share URL
@@ -10,7 +11,11 @@ import { jsPDF } from 'jspdf';
  */
 export const fetchClaudeContent = async (shareId: string): Promise<string> => {
   try {
-    const url = `https://claude.ai/share/${shareId}`;
+    // We need to use a CORS proxy since Claude.ai doesn't allow direct fetching
+    // In production, you should set up your own proxy server
+    const corsProxy = 'https://corsproxy.io/?';
+    const url = `${corsProxy}https://claude.ai/share/${shareId}`;
+    
     const response = await fetch(url);
     
     if (!response.ok) {
@@ -55,28 +60,123 @@ export const createTemporaryIframe = (htmlContent: string): Promise<HTMLIFrameEl
 };
 
 /**
+ * Extracts the conversational content from the Claude share HTML
+ * 
+ * @param iframe The iframe containing the Claude share content
+ * @returns The HTML element containing the conversation or null if not found
+ */
+export const extractConversationContent = (iframe: HTMLIFrameElement): HTMLElement | null => {
+  if (!iframe.contentWindow || !iframe.contentWindow.document) {
+    return null;
+  }
+  
+  const doc = iframe.contentWindow.document;
+  
+  // Try various selectors that might contain the conversation
+  const selectors = [
+    '.conversation-container',
+    '.message-container',
+    '.chat-container',
+    'main',
+    '#__next > div',
+    'body'
+  ];
+  
+  for (const selector of selectors) {
+    const element = doc.querySelector(selector);
+    if (element) {
+      return element as HTMLElement;
+    }
+  }
+  
+  // If we can't find any specific container, return the body
+  return doc.body;
+};
+
+/**
+ * Enhances the conversation HTML with proper styling
+ * 
+ * @param element The HTML element containing the conversation
+ */
+export const enhanceConversationStyle = (element: HTMLElement): void => {
+  // Add basic styles to make the conversation readable in PDF
+  const style = document.createElement('style');
+  style.textContent = `
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 20px;
+      background: white;
+      color: black;
+    }
+    .message { 
+      margin-bottom: 20px; 
+      padding: 10px; 
+      border-radius: 8px;
+    }
+    .human-message {
+      background-color: #f0f0f0;
+    }
+    .ai-message {
+      background-color: #e6f7ff;
+    }
+    .message-header {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    img, svg {
+      max-width: 100%;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    code {
+      font-family: monospace;
+    }
+  `;
+  
+  if (element.ownerDocument && element.ownerDocument.head) {
+    element.ownerDocument.head.appendChild(style);
+  }
+};
+
+/**
  * Converts the Claude share content to a PDF
  * 
- * @param shareId The Claude share ID
+ * @param url The Claude share URL
  * @returns Promise that resolves when the PDF is downloaded
  */
 export const convertClaudeToPdf = async (url: string): Promise<void> => {
   try {
-    const shareId = url.split('/share/')[1];
+    const shareId = extractShareId(url);
+    
+    if (!shareId) {
+      throw new Error('Invalid Claude share URL');
+    }
+    
+    // Fetch the HTML content
     const htmlContent = await fetchClaudeContent(shareId);
     
     // Create a temporary iframe to hold the content
     const iframe = await createTemporaryIframe(htmlContent);
     
     // Find the conversation container in the iframe
-    const conversationContainer = iframe.contentWindow?.document.querySelector('.conversation-container');
+    const conversationContent = extractConversationContent(iframe);
     
-    if (!conversationContainer) {
+    if (!conversationContent) {
       throw new Error('Could not find conversation content in the Claude share');
     }
     
+    // Enhance the styling for better PDF output
+    enhanceConversationStyle(conversationContent);
+    
+    // Give the browser a moment to apply styles
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
     // Use html2canvas to capture the conversation
-    const canvas = await html2canvas(conversationContainer as HTMLElement, {
+    const canvas = await html2canvas(conversationContent, {
       scale: 2, // Higher quality
       useCORS: true,
       logging: false,
@@ -131,7 +231,7 @@ export const convertClaudeToPdf = async (url: string): Promise<void> => {
 
 /**
  * Simulates the actual PDF conversion 
- * (This is a placeholder since we can't directly access Claude content in this demo)
+ * (This function is kept for fallback purposes)
  * 
  * @param url The Claude share URL
  * @returns Promise that resolves when the simulation is complete

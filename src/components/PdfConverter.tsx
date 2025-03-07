@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import URLInput from './URLInput';
 import ConversionButton from './ConversionButton';
-import { validateClaudeURL } from '@/utils/validation';
-import { simulateConversion } from '@/utils/pdfUtils';
+import { validateClaudeURL, extractShareId } from '@/utils/validation';
+import { convertClaudeToPdf } from '@/utils/pdfUtils';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface PdfConverterProps {
@@ -28,10 +27,8 @@ const PdfConverter: React.FC<PdfConverterProps> = ({ className }) => {
     setIsConverting(true);
     
     try {
-      // In a real implementation, we would use convertClaudeToPdf
-      // Since we can't actually access Claude content in this demo,
-      // we'll use a simulation function
-      await simulateConversion(url);
+      // Use the real conversion function instead of simulation
+      await convertClaudeToPdf(url);
       
       // Add to recent URLs (no duplicates)
       if (!recentUrls.includes(url)) {
